@@ -4,23 +4,19 @@ from util_fns import *
 from dl_fns import *
 
 # PARAMS
-pretrained = False
 log = True
-stim_path = r'C:\Users\45027900\Desktop\NeuroFovea_PyTorch-main\metamers'
-# stim_path = r'C:\Users\45027900\Desktop\cornet\stimuli\samediff'
-# stim_path = r'C:\Users\45027900\Desktop\cornet\stimuli\no_transf'
-log_dir = r'C:\Users\45027900\Desktop\cornet\siamese_logs'
+stim_path = r'stimuli\metamers'
+# stim_path = r'stimuli\samediff'
+# stim_path = r'stimuli\no_transf'
+log_dir = r'siamese_logs'
 batch_sz = 672//8
 # batch_sz = 24
 cycles = 1
 epochs = 100
-f1c=False
-f1c_lr_max = 1e-2
 lr_min = 1e-4
 weight_decay = 1e-2
-freeze = False
-fb = True
-fov_noise = True
+fb = True # if this is False make sure you comment out fb = self.fb(out_cat) in the net forward func
+fov_noise = True # if this is True the fov stimulus is s&p noise, False is grey background
 
 # criterion = ContrastiveLoss()
 # criterion = nn.CosineEmbeddingLoss()
@@ -146,73 +142,25 @@ class SiameseNetEncoderFB(nn.Module):
 ## INIT WEIGHTS, LOAD PRETRAINED AND FREEZE LAYER
 net = SiameseNetEncoderFB().cuda()
 net = init_weights(net)
-
-if pretrained:
-    url = f'https://s3.amazonaws.com/cornet-models/cornet_z-5c427c9c.pth'
-    map_location = r'C:\Users\45027900\Desktop\cornet\pretrained_state_dict'
-    ckpt_data = torch.utils.model_zoo.load_url(url)
-
-    state_dict = {"V1_per.0.weight": ckpt_data['state_dict']['module.V1.conv.weight'],
-                  "V1_per.0.bias": ckpt_data['state_dict']['module.V1.conv.bias'],
-                  "V2_per.0.weight": ckpt_data['state_dict']['module.V2.conv.weight'],
-                  "V2_per.0.bias": ckpt_data['state_dict']['module.V2.conv.bias'],
-                  "V4_per.0.weight": ckpt_data['state_dict']['module.V4.conv.weight'],
-                  "V4_per.0.bias": ckpt_data['state_dict']['module.V4.conv.bias'],
-                  "V1_fov.0.weight": ckpt_data['state_dict']['module.V1.conv.weight'],
-                  "V1_fov.0.bias": ckpt_data['state_dict']['module.V1.conv.bias'],
-                  "V2_fov.0.weight": ckpt_data['state_dict']['module.V2.conv.weight'],
-                  "V2_fov.0.bias": ckpt_data['state_dict']['module.V2.conv.bias'],
-                  "V4_fov.0.weight": ckpt_data['state_dict']['module.V4.conv.weight'],
-                  "V4_fov.0.bias": ckpt_data['state_dict']['module.V4.conv.bias'],
-                  # "IT.0.weight": ckpt_data['state_dict']['module.IT.conv.weight'],
-                  # "IT.0.bias": ckpt_data['state_dict']['module.IT.conv.bias'],
-                  # "decoder.2.weight": net.decoder[2].weight, # ckpt_data['state_dict']['module.decoder.linear.weight'],
-                  # "decoder.2.bias": net.decoder[2].bias # ckpt_data['state_dict']['module.decoder.linear.bias']
-                  }
-
-if freeze:
-       net.V1_per[0].weight.requires_grad = False
-       net.V1_per[0].bias.requires_grad = False
-       net.V2_per[0].weight.requires_grad = False
-       net.V2_per[0].bias.requires_grad = False
-       net.V4_per[0].weight.requires_grad = False
-       net.V4_per[0].bias.requires_grad = False
-       net.V1_fov[0].weight.requires_grad = True
-       net.V1_fov[0].bias.requires_grad = True
-       net.V2_fov[0].weight.requires_grad = True
-       net.V2_fov[0].bias.requires_grad = True
-       net.V4_fov[0].weight.requires_grad = True
-       net.V4_fov[0].bias.requires_grad = True
-       net.IT[0].weight.requires_grad = True
-       net.IT[0].bias.requires_grad = True
-
 net = nn.DataParallel(net)
 net.to(device)
 
 params_to_update = net.parameters()
-if freeze:
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, params_to_update), lr=lr_min, weight_decay=weight_decay)
-else:
-    optimizer = optim.Adam(params_to_update, lr=lr_min, weight_decay=weight_decay)
+optimizer = optim.Adam(params_to_update, lr=lr_min, weight_decay=weight_decay)
 
 ## START TRAIN/TEST
 if log:
     timestamp = datetime.now().strftime("%d-%b-%Y_%H-%M-%S")
-    run_name = f'{timestamp}_METAMERS_fb-{fb}_pretr-{pretrained}_ContrLoss_samediff_adam_bs-{batch_sz}_lr-{lr_min}_f1c-{f1c}_{cycles}x{epochs}'
+    run_name = f'{timestamp}_METAMERS_fb-{fb}_CrossEntLoss_{stim_path.split('\')[-1]}_adam_bs-{batch_sz}_lr-{lr_min}_{cycles}x{epochs}'
     path = os.path.join(log_dir, run_name)
     logger = start_logger(path)
-    shutil.copy(r'C:\Users\45027900\Desktop\cornet\project\main.py', os.path.join(path, 'main.py'))
+    shutil.copy('main.py', os.path.join(path, 'main.py'))
 else:
     path = ''
 
 print('\nTrain/Test started!')
-# weights = net.module.V1[0].weight.data.cpu()
-# plot_filters_multi_channel(weights, path)
 
 for cycle in range(cycles):
-    if f1c:
-        scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=f1c_lr_max, steps_per_epoch=len(train_loader), epochs=epochs)
-        lr = []
     tr_loss = []
     tr_acc = []
     te_loss = []
@@ -233,9 +181,6 @@ for cycle in range(cycles):
             loss = criterion(out, labels)
             loss.backward()
             optimizer.step()
-            if f1c:
-                lr.append(scheduler.get_last_lr())
-                scheduler.step()
             tr_running_loss += loss.item()
             tr_total += labels.size(0)
             tr_correct += (pred == labels).sum().item()
@@ -270,11 +215,13 @@ for cycle in range(cycles):
             print(log_msg)
             if log:
                 logger.info(log_msg)
-    if f1c:
-        plot_lr(lr, cycle, epoch, len(test_loader), path)
     make_cf(cf_y, cf_pred, cycle, epoch, path)
     plot_losses(tr_loss, te_loss, cycle, epoch, path)
     plot_acc(tr_acc, te_acc, cycle, epoch, path)
+    
+    weights = net.module.V1[0].weight.data.cpu()
+    plot_filters_multi_channel(weights, path)
+
     if log:
         filename = f"{datetime.now().strftime('%d-%b-%Y_%H-%M-%S')}_{cycle+1}x{epoch+1}_trloss-{str(round(tr_running_loss, 5)).split('.')[-1]}_teacc-{str(round(te_correct / te_total, 4)).split('.')[-1]}"
         torch.save(net.state_dict(), os.path.join(path,filename))
