@@ -25,8 +25,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 defaults.device = device
 
-seed=42
+seed = 42
 np.random.seed(seed)
 torch.manual_seed(seed)
 
-sn.set(style='darkgrid')
+sn.set(style="darkgrid")

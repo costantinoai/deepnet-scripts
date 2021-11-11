@@ -6,10 +6,10 @@ from dl_fns import *
 # PARAMS
 log = False
 # stim_path = r'C:\Users\45027900\Desktop\NeuroFovea_PyTorch-main\metamers'
-stim_path = r'C:\Users\45027900\Desktop\cornet\stimuli\samediff'
+stim_path = r"C:\Users\45027900\Desktop\cornet\stimuli\samediff"
 # stim_path = r'C:\Users\45027900\Desktop\cornet\stimuli\no_transf'
-log_dir = r'C:\Users\45027900\Desktop\cornet\siamese_logs'
-batch_sz = 56 # 6720 // 120
+log_dir = r"C:\Users\45027900\Desktop\cornet\siamese_logs"
+batch_sz = 56  # 6720 // 120
 # batch_sz = 24
 cycles = 1
 epochs = 100
@@ -17,7 +17,7 @@ lr_min = 1e-3
 weight_decay = 1e-2
 fb = False
 fov_noise = False
-run_id = 'BIGGER_PER_KERNEL'
+run_id = "BIGGER_PER_KERNEL"
 
 criterion = nn.CrossEntropyLoss()
 
@@ -42,80 +42,84 @@ class SiameseNetEncoderFB(nn.Module):
 
         # V1 layers
         self.V1_p = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=7*2, stride=2,
-                      padding=7 // 2),  # + self.vfb,
+            nn.Conv2d(
+                3, 64, kernel_size=7 * 2, stride=2, padding=7 // 2
+            ),  # + self.vfb,
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            )
+        )
 
         # V2 layers
         self.V2_p = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=3 // 2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            )
+        )
 
         # V4 layers
         self.V4_p = nn.Sequential(
             nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=3 // 2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            )
+        )
 
         # IT layers
         self.IT_p = nn.Sequential(
             nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=3 // 2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            )
+        )
 
         # V1 layers
         self.V1_f = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=7, stride=2,
-                      padding=7 // 2),  # + self.vfb,
+            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=7 // 2),  # + self.vfb,
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            )
+        )
 
         # V2 layers
         self.V2_f = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=3 // 2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            )
+        )
 
         # V4 layers
         self.V4_f = nn.Sequential(
             nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=3 // 2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            )
+        )
 
         # IT layers
         self.IT_f = nn.Sequential(
             nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=3 // 2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            )
+        )
 
         # head
         self.head = nn.Sequential(
-          AdaptiveConcatPool2d(),
-          nn.Flatten(),
-          nn.BatchNorm1d(2048, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
-          nn.Dropout(p=0.25, inplace=False),
-          nn.Linear(in_features=2048, out_features=512, bias=False),
-          nn.ReLU(inplace=True),
-          nn.BatchNorm1d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
-          nn.Dropout(p=0.5, inplace=False),
-          nn.Linear(in_features=512, out_features=2, bias=False),
-          )
+            AdaptiveConcatPool2d(),
+            nn.Flatten(),
+            nn.BatchNorm1d(
+                2048, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True
+            ),
+            nn.Dropout(p=0.25, inplace=False),
+            nn.Linear(in_features=2048, out_features=512, bias=False),
+            nn.ReLU(inplace=True),
+            nn.BatchNorm1d(
+                512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True
+            ),
+            nn.Dropout(p=0.5, inplace=False),
+            nn.Linear(in_features=512, out_features=2, bias=False),
+        )
 
         self.fb = nn.Sequential(
             nn.Conv2d(1024, 3, kernel_size=3, stride=1, padding=221),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-          )
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+        )
 
     def forward(self, inp):
         inp1 = inp[0]
@@ -151,6 +155,7 @@ class SiameseNetEncoderFB(nn.Module):
 
         return out
 
+
 net = SiameseNetEncoderFB().cuda()
 net = init_weights(net)
 net = nn.DataParallel(net)
@@ -162,14 +167,17 @@ optimizer = optim.Adam(params_to_update, lr=lr_min, weight_decay=weight_decay)
 ## START TRAIN/TEST
 if log:
     timestamp = datetime.now().strftime("%d-%b-%Y_%H-%M-%S")
-    run_name = f'{timestamp}_{run_id}_fb-{fb}_fovnoise-{fov_noise}_CrossEntLoss_{os.path.normpath(stim_path).split(os.sep)[-1]}_adam_bs-{batch_sz}_lr-{lr_min}_{cycles}x{epochs}'
+    run_name = f"{timestamp}_{run_id}_fb-{fb}_fovnoise-{fov_noise}_CrossEntLoss_{os.path.normpath(stim_path).split(os.sep)[-1]}_adam_bs-{batch_sz}_lr-{lr_min}_{cycles}x{epochs}"
     path = os.path.join(log_dir, run_name)
     logger = start_logger(path)
-    shutil.copy(r'C:\Users\45027900\Desktop\cornet\project\main.py', os.path.join(path, 'main.py'))
+    shutil.copy(
+        r"C:\Users\45027900\Desktop\cornet\project\main.py",
+        os.path.join(path, "main.py"),
+    )
 else:
-    path = ''
+    path = ""
 
-print('\nTrain/Test started!')
+print("\nTrain/Test started!")
 # weights = net.module.V1[0].weight.data.cpu()
 # plot_filters_multi_channel(weights, path)
 
@@ -201,7 +209,6 @@ for cycle in range(cycles):
         tr_loss.append(tr_running_loss)
         tr_acc.append(100 * tr_correct / tr_total)
 
-
         # TEST
         net.eval()
 
@@ -224,7 +231,14 @@ for cycle in range(cycles):
             te_acc.append(100 * te_correct / te_total)
             te_loss.append(te_running_loss)
             end = time.time() - start
-            log_msg = f'%5d / %5d TRAIN/TEST losses: \t %.8f \t %.8f \t\t acc: \t %.2f %% \t %.2f %% \t\t time: {round(end,3)}' % (cycle + 1, epoch + 1, tr_running_loss, te_running_loss, 100 * tr_correct / tr_total , 100 * te_correct / te_total)
+            log_msg = f"%5d / %5d TRAIN/TEST losses: \t %.8f \t %.8f \t\t acc: \t %.2f %% \t %.2f %% \t\t time: {round(end,3)}" % (
+                cycle + 1,
+                epoch + 1,
+                tr_running_loss,
+                te_running_loss,
+                100 * tr_correct / tr_total,
+                100 * te_correct / te_total,
+            )
             print(log_msg)
             if log:
                 logger.info(log_msg)
@@ -233,8 +247,4 @@ for cycle in range(cycles):
     plot_acc(tr_acc, te_acc, cycle, epoch, path)
     if log:
         filename = f"{datetime.now().strftime('%d-%b-%Y_%H-%M-%S')}_{cycle+1}x{epoch+1}_trloss-{str(round(tr_running_loss, 5)).split('.')[-1]}_teacc-{str(round(te_correct / te_total, 4)).split('.')[-1]}"
-        torch.save(net.state_dict(), os.path.join(path,filename))
-
-
-
-
+        torch.save(net.state_dict(), os.path.join(path, filename))
