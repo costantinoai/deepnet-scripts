@@ -4,25 +4,22 @@ from util_fns import *
 from dl_fns import *
 
 # PARAMS
-log = True
-stim_path = r'stimuli\metamers'
-# stim_path = r'stimuli\samediff'
-# stim_path = r'stimuli\no_transf'
-log_dir = r'siamese_logs'
-batch_sz = 672//8
+log = False
+# stim_path = r'C:\Users\45027900\Desktop\NeuroFovea_PyTorch-main\metamers'
+stim_path = r'C:\Users\45027900\Desktop\cornet\stimuli\samediff'
+# stim_path = r'C:\Users\45027900\Desktop\cornet\stimuli\no_transf'
+log_dir = r'C:\Users\45027900\Desktop\cornet\siamese_logs'
+batch_sz = 56 # 6720 // 120
 # batch_sz = 24
 cycles = 1
 epochs = 100
-lr_min = 1e-4
+lr_min = 1e-3
 weight_decay = 1e-2
-fb = True # if this is False make sure you comment out fb = self.fb(out_cat) in the net forward func
-fov_noise = True # if this is True the fov stimulus is s&p noise, False is grey background
+fb = False
+fov_noise = False
+run_id = 'BIGGER_PER_KERNEL'
 
-# criterion = ContrastiveLoss()
-# criterion = nn.CosineEmbeddingLoss()
 criterion = nn.CrossEntropyLoss()
-
-
 
 # MAKE DATALOADER
 # pairs = glob.glob(os.path.join(stim_path, '*.png'))
@@ -30,12 +27,13 @@ criterion = nn.CrossEntropyLoss()
 
 dls = make_dls(stim_path, batch_sz, fov_noise)
 # print('\nShowing first batch...')
-# dls.show_batch(max_n = batch_sz)
+# dls.show_batch(max_n = 2)
 # plt.show()
 
-train_loader = dls[0]
-test_loader = dls[1]
-
+# train_loader = dls[0]
+# test_loader = dls[1]
+train_loader = dls.train
+test_loader = dls.valid
 
 # INIT NET
 class SiameseNetEncoderFB(nn.Module):
@@ -43,7 +41,36 @@ class SiameseNetEncoderFB(nn.Module):
         super(SiameseNetEncoderFB, self).__init__()
 
         # V1 layers
-        self.V1 = nn.Sequential(
+        self.V1_p = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=7*2, stride=2,
+                      padding=7 // 2),  # + self.vfb,
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+            )
+
+        # V2 layers
+        self.V2_p = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=3 // 2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+            )
+
+        # V4 layers
+        self.V4_p = nn.Sequential(
+            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=3 // 2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+            )
+
+        # IT layers
+        self.IT_p = nn.Sequential(
+            nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=3 // 2),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+            )
+
+        # V1 layers
+        self.V1_f = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=7, stride=2,
                       padding=7 // 2),  # + self.vfb,
             nn.ReLU(inplace=True),
@@ -51,21 +78,21 @@ class SiameseNetEncoderFB(nn.Module):
             )
 
         # V2 layers
-        self.V2 = nn.Sequential(
+        self.V2_f = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=3 // 2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
             )
 
         # V4 layers
-        self.V4 = nn.Sequential(
+        self.V4_f = nn.Sequential(
             nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=3 // 2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
             )
 
         # IT layers
-        self.IT = nn.Sequential(
+        self.IT_f = nn.Sequential(
             nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=3 // 2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
@@ -90,56 +117,40 @@ class SiameseNetEncoderFB(nn.Module):
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
           )
 
-    def forward_once(self, inp):
-        x = inp
-        v1 = self.V1(x)
-        v2 = self.V2(v1)
-        v4 = self.V4(v2)
-        vIT = self.IT(v4)
-        return vIT
-
     def forward(self, inp):
         inp1 = inp[0]
         inp2 = inp[1]
         fov_inp = inp[2]
 
         # perihperal 1
-        v1_p1 = self.V1(inp1)
-        v2_p1 = self.V2(v1_p1)
-        v4_p1 = self.V4(v2_p1)
-        vIT_p1 = self.IT(v4_p1)
+        v1_p1 = self.V1_p(inp1)
+        v2_p1 = self.V2_p(v1_p1)
+        v4_p1 = self.V4_p(v2_p1)
+        vIT_p1 = self.IT_p(v4_p1)
 
         # perihperal 1
-        v1_p2 = self.V1(inp2)
-        v2_p2 = self.V2(v1_p2)
-        v4_p2 = self.V4(v2_p2)
-        vIT_p2 = self.IT(v4_p2)
+        v1_p2 = self.V1_p(inp2)
+        v2_p2 = self.V2_p(v1_p2)
+        v4_p2 = self.V4_p(v2_p2)
+        vIT_p2 = self.IT_p(v4_p2)
 
         out_cat = torch.cat((vIT_p1, vIT_p2), 1)
 
         # fovea
-        # NOTE: currently, the fb projection is coerced to the input
-        #       image dimensions by screwing with the conv2d padding.
-        #       There are probably other / better ways of doing this.
-
-        # TODO: not sure this is the best way. noise from
-        # 0.0 to 0.5 may be completely useless.. probably should
-        # be higher? see the range in fb representation + metamers!
         fb = self.fb(out_cat)
         try:
-            v1_fov = self.V1(fb + fov_inp)
+            v1_fov = self.V1_f(fb + fov_inp)
         except:
-            v1_fov = self.V1(fov_inp)
-        v2_fov = self.V2(v1_fov)
-        v4_fov = self.V4(v2_fov)
-        vIT_fov = self.IT(v4_fov)
+            v1_fov = self.V1_f(fov_inp)
+        v2_fov = self.V2_f(v1_fov)
+        v4_fov = self.V4_f(v2_fov)
+        vIT_fov = self.IT_f(v4_fov)
 
-        out_all = torch.cat((vIT_p1, vIT_p2, vIT_fov), 1)
-        out = self.head(out_cat)
+        out_all = torch.cat((vIT_p1 + vIT_fov, vIT_p2 + vIT_fov), 1)
+        out = self.head(out_all)
 
         return out
 
-## INIT WEIGHTS, LOAD PRETRAINED AND FREEZE LAYER
 net = SiameseNetEncoderFB().cuda()
 net = init_weights(net)
 net = nn.DataParallel(net)
@@ -151,14 +162,16 @@ optimizer = optim.Adam(params_to_update, lr=lr_min, weight_decay=weight_decay)
 ## START TRAIN/TEST
 if log:
     timestamp = datetime.now().strftime("%d-%b-%Y_%H-%M-%S")
-    run_name = f'{timestamp}_METAMERS_fb-{fb}_CrossEntLoss_{stim_path.split('\')[-1]}_adam_bs-{batch_sz}_lr-{lr_min}_{cycles}x{epochs}'
+    run_name = f'{timestamp}_{run_id}_fb-{fb}_fovnoise-{fov_noise}_CrossEntLoss_{os.path.normpath(stim_path).split(os.sep)[-1]}_adam_bs-{batch_sz}_lr-{lr_min}_{cycles}x{epochs}'
     path = os.path.join(log_dir, run_name)
     logger = start_logger(path)
-    shutil.copy('main.py', os.path.join(path, 'main.py'))
+    shutil.copy(r'C:\Users\45027900\Desktop\cornet\project\main.py', os.path.join(path, 'main.py'))
 else:
     path = ''
 
 print('\nTrain/Test started!')
+# weights = net.module.V1[0].weight.data.cpu()
+# plot_filters_multi_channel(weights, path)
 
 for cycle in range(cycles):
     tr_loss = []
@@ -174,7 +187,7 @@ for cycle in range(cycles):
         tr_correct = 0
         tr_total = 0
         start = time.time()
-        for i, (inputs, labels) in enumerate(train_loader):
+        for (inputs, labels) in train_loader:
             optimizer.zero_grad()
             out = net(inputs)
             _, pred = torch.max(out, 1)
@@ -218,10 +231,6 @@ for cycle in range(cycles):
     make_cf(cf_y, cf_pred, cycle, epoch, path)
     plot_losses(tr_loss, te_loss, cycle, epoch, path)
     plot_acc(tr_acc, te_acc, cycle, epoch, path)
-    
-    weights = net.module.V1[0].weight.data.cpu()
-    plot_filters_multi_channel(weights, path)
-
     if log:
         filename = f"{datetime.now().strftime('%d-%b-%Y_%H-%M-%S')}_{cycle+1}x{epoch+1}_trloss-{str(round(tr_running_loss, 5)).split('.')[-1]}_teacc-{str(round(te_correct / te_total, 4)).split('.')[-1]}"
         torch.save(net.state_dict(), os.path.join(path,filename))

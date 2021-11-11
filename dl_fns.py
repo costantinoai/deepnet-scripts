@@ -44,7 +44,7 @@ def get_img_tuple_noise(path):
     im1 = pair.crop((left1, top1, right1, bottom1)).resize((224,224))
     im2 = pair.crop((left2, top2, right2, bottom2)).resize((224,224))
     im3 = Image.new('RGB', (224, 224), (125,125,125))
-    im3 = Image.fromarray(np.uint8(skimage.util.random_noise(skimage.img_as_float(im3), mode='s&p',amount = 1) * 255)) # 5 = salt and pepper noise
+    im3 = Image.fromarray(np.uint8(skimage.util.random_noise(skimage.img_as_float(im3), mode='s&p',amount = 1) * 255)) 
 
     return (ToTensor()(PILImage(im1)), ToTensor()(PILImage(im2)), ToTensor()(PILImage(im3)), label)
 
@@ -89,7 +89,7 @@ def make_dls(stim_path, batch_sz = 24, fov_noise = False):
             splitter=splitter,
             )
 
-    dls = siamese.dataloaders(fnames, bs=batch_sz, seed=seed)
+    dls = siamese.dataloaders(fnames, bs=batch_sz, seed=seed, shuffle=True, device='cuda')
     # check that train and test splits have balanced classes
     train_test = ['TRAIN','TEST']
     for train_test_id in [0, 1]:
