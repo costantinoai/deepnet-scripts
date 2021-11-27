@@ -6,6 +6,93 @@ def label_func(path):
     split_name = path.stem.split("_")
     return 0 if split_name[-1] == split_name[-2] else 1
 
+def get_img_tuple_fov_same(path):
+    root = os.path.dirname(path)
+    
+    pair = Image.open(path)
+    pair_basename = os.path.basename(path).split('_')
+
+    fov_cat = pair_basename[-2][0] # b
+    fov_img_id = f'{fov_cat}{str(random.randint(1,30))}' # b1
+    fov_basename = pair_basename[:-2]
+    fov_basename.extend([fov_img_id, fov_img_id+'.png'])
+    fov_basename = '_'.join(fov_basename)
+    fov_path = os.path.join(root, fov_basename)    
+    fov_pair = Image.open(fov_path)
+
+    label = label_func(Path(path))
+    orientation = os.path.basename(path).split("_")[-3]
+
+    width, height = pair.size
+
+    if orientation == "normal":
+        left1, top1, right1, bottom1 = width - width // 4, 0, width, height // 4
+        left2, top2, right2, bottom2 = 0, height - height // 4, width // 4, height
+    else:
+        left1, top1, right1, bottom1 = 0, 0, width // 4, height // 4
+        left2, top2, right2, bottom2 = (
+            width - width // 4,
+            height - height // 4,
+            width,
+            height,
+        )
+
+    im1 = pair.crop((left1, top1, right1, bottom1)).resize((224, 224))
+    im2 = pair.crop((left2, top2, right2, bottom2)).resize((224, 224))
+    im3 = fov_pair.crop((left2, top2, right2, bottom2)).resize((224, 224))
+
+    return (
+        ToTensor()(PILImage(im1)),
+        ToTensor()(PILImage(im2)),
+        ToTensor()(PILImage(im3)),
+        label,
+    )
+    
+def get_img_tuple_fov_diff(path):
+    root = os.path.dirname(path)
+
+    pair = Image.open(path)
+    pair_basename = os.path.basename(path).split('_')
+    per_cat = pair_basename[-2][0] # c
+
+    cats = ['b','c','f','m']
+    cats.remove(per_cat)
+
+    fov_cat = cats[random.randint(0,2)] # b
+    fov_img_id = f'{fov_cat}{str(random.randint(1,30))}' # b1
+    fov_basename = pair_basename[:-2]
+    fov_basename.extend([fov_img_id, fov_img_id+'.png'])
+    fov_basename = '_'.join(fov_basename)
+    fov_path = os.path.join(root, fov_basename)    
+    fov_pair = Image.open(fov_path)
+
+    label = label_func(Path(path))
+    orientation = os.path.basename(path).split("_")[-3]
+
+    width, height = pair.size
+
+    if orientation == "normal":
+        left1, top1, right1, bottom1 = width - width // 4, 0, width, height // 4
+        left2, top2, right2, bottom2 = 0, height - height // 4, width // 4, height
+    else:
+        left1, top1, right1, bottom1 = 0, 0, width // 4, height // 4
+        left2, top2, right2, bottom2 = (
+            width - width // 4,
+            height - height // 4,
+            width,
+            height,
+        )
+
+    im1 = pair.crop((left1, top1, right1, bottom1)).resize((224, 224))
+    im2 = pair.crop((left2, top2, right2, bottom2)).resize((224, 224))
+    im3 = fov_pair.crop((left2, top2, right2, bottom2)).resize((224, 224))
+
+    return (
+        ToTensor()(PILImage(im1)),
+        ToTensor()(PILImage(im2)),
+        ToTensor()(PILImage(im3)),
+        label,
+    )
 
 def get_img_tuple_no_noise(path):
     pair = Image.open(path)
